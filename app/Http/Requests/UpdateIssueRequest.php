@@ -23,7 +23,7 @@ class UpdateIssueRequest extends FormRequest
     public function rules(): array
     {
         return [
-            //
+       
         ];
     }
 }
