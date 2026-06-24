@@ -21,6 +21,9 @@
                     <a href="{{ route('projects.index') }}" class="text-blue-600 hover:underline">
                         Projects
                     </a>
+                    <a href="{{ route('issues.index') }}" class="text-blue-600 hover:underline">
+                        Issues
+                    </a>
                 </div>
             </div>
         </nav>

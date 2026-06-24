@@ -5,62 +5,89 @@ namespace App\Http\Controllers;
 use App\Models\Issue;
 use App\Http\Requests\StoreIssueRequest;
 use App\Http\Requests\UpdateIssueRequest;
+use App\Models\Project;
+use App\Models\Tag;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\View\View;
 
 class IssueController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
-    public function index()
+    public function index(Request $request): View
     {
-        //
+        $issues = Issue::query()
+            ->with(['project', 'tags'])
+            ->when($request->filled('status'), function ($query) use ($request) {
+                $query->where('status', $request->status);
+            })
+            ->when($request->filled('priority'), function ($query) use ($request) {
+                $query->where('priority', $request->priority);
+            })
+            ->when($request->filled('tag'), function ($query) use ($request) {
+                $query->whereHas('tags', function ($tagQuery) use ($request) {
+                    $tagQuery->where('tags.id', $request->tag);
+                });
+            })
+            ->latest()
+            ->paginate(10)
+            ->withQueryString();
+
+        $tags = Tag::query()
+            ->orderBy('name')
+            ->get();
+
+        return view('issues.index', compact('issues', 'tags'));
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
+    public function create(): View
     {
-        //
+        $projects = Project::query()
+            ->orderBy('name')
+            ->get();
+
+        return view('issues.create', compact('projects'));
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(StoreIssueRequest $request)
+    public function store(StoreIssueRequest $request): RedirectResponse
     {
-        //
+        $issue = Issue::create($request->validated());
+
+        return redirect()
+            ->route('issues.show', $issue)
+            ->with('success', 'Issue created successfully.');
     }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(Issue $issue)
+    public function show(Issue $issue): View
     {
-        //
+        $issue->load(['project', 'tags']);
+
+        return view('issues.show', compact('issue'));
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(Issue $issue)
+    public function edit(Issue $issue): View
     {
-        //
+        $projects = Project::query()
+            ->orderBy('name')
+            ->get();
+
+        return view('issues.edit', compact('issue', 'projects'));
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(UpdateIssueRequest $request, Issue $issue)
+    public function update(UpdateIssueRequest $request, Issue $issue): RedirectResponse
     {
-        //
+        $issue->update($request->validated());
+
+        return redirect()
+            ->route('issues.show', $issue)
+            ->with('success', 'Issue updated successfully.');
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(Issue $issue)
+    public function destroy(Issue $issue): RedirectResponse
     {
-        //
+        $issue->delete();
+
+        return redirect()
+            ->route('issues.index')
+            ->with('success', 'Issue deleted successfully.');
     }
 }
