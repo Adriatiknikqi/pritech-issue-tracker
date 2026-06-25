@@ -90,9 +90,33 @@
 <div class="rounded bg-white p-6 shadow">
     <h2 class="mb-4 text-xl font-semibold">Comments</h2>
 
-    <p class="text-gray-500">
-        Comments will be loaded here.
-    </p>
+    <form id="comment-form" class="mb-6">
+        <div id="comment-errors" class="mb-4 hidden rounded bg-red-100 px-4 py-3 text-red-800"></div>
+
+        <div class="mb-4">
+            <label for="author_name" class="mb-1 block font-medium">Author Name</label>
+
+            <input type="text" id="author_name" name="author_name"
+                class="w-full rounded border border-gray-300 px-3 py-2">
+        </div>
+
+        <div class="mb-4">
+            <label for="body" class="mb-1 block font-medium">Comment</label>
+
+            <textarea id="body" name="body" rows="4" class="w-full rounded border border-gray-300 px-3 py-2"></textarea>
+        </div>
+
+        <button type="submit" class="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700">
+            Add Comment
+        </button>
+    </form>
+
+    <div id="comments-list" class="space-y-4"></div>
+
+    <button type="button" id="load-more-comments"
+        class="mt-4 hidden rounded bg-gray-200 px-4 py-2 text-gray-800 hover:bg-gray-300">
+        Load More Comments
+    </button>
 </div>
 
 <script>
@@ -179,5 +203,117 @@
             attachedTags.innerHTML = '<p id="no-tags-message" class="text-gray-500">No tags attached yet.</p>';
         }
     });
+     const commentForm = document.getElementById('comment-form');
+    const commentsList = document.getElementById('comments-list');
+    const commentErrors = document.getElementById('comment-errors');
+    const loadMoreCommentsButton = document.getElementById('load-more-comments');
+
+    let commentsPage = 1;
+    let lastCommentsPage = 1;
+
+    function escapeHtml(value) {
+        return String(value)
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#039;');
+    }
+
+    function renderComment(comment, prepend = false) {
+        const commentElement = document.createElement('div');
+        commentElement.className = 'rounded border border-gray-200 p-4';
+
+        commentElement.innerHTML = `
+            <div class="mb-2 flex items-center justify-between">
+                <p class="font-medium">${escapeHtml(comment.author_name)}</p>
+                <p class="text-sm text-gray-500">${new Date(comment.created_at).toLocaleString()}</p>
+            </div>
+
+            <p class="whitespace-pre-line text-gray-700">${escapeHtml(comment.body)}</p>
+        `;
+
+        if (prepend) {
+            commentsList.prepend(commentElement);
+        } else {
+            commentsList.appendChild(commentElement);
+        }
+    }
+
+    async function loadComments(page = 1) {
+        const response = await fetch(`/issues/${issueId}/comments?page=${page}`, {
+            headers: {
+                'Accept': 'application/json',
+            },
+        });
+
+        if (!response.ok) {
+            return;
+        }
+
+        const data = await response.json();
+
+        commentsPage = data.current_page;
+        lastCommentsPage = data.last_page;
+
+        data.data.forEach((comment) => {
+            renderComment(comment);
+        });
+
+        if (commentsPage < lastCommentsPage) {
+            loadMoreCommentsButton.classList.remove('hidden');
+        } else {
+            loadMoreCommentsButton.classList.add('hidden');
+        }
+    }
+
+    commentForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+
+        commentErrors.classList.add('hidden');
+        commentErrors.innerHTML = '';
+
+        const formData = new FormData(commentForm);
+
+        const response = await fetch(`/issues/${issueId}/comments`, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': csrfToken,
+                'Accept': 'application/json',
+            },
+            body: formData,
+        });
+
+        const data = await response.json();
+
+        if (response.status === 422) {
+            const errors = Object.values(data.errors).flat();
+
+            commentErrors.innerHTML = `
+                <p class="font-semibold">Please fix the errors below:</p>
+                <ul class="mt-2 list-disc pl-5">
+                    ${errors.map((error) => `<li>${escapeHtml(error)}</li>`).join('')}
+                </ul>
+            `;
+
+            commentErrors.classList.remove('hidden');
+            return;
+        }
+
+        if (!response.ok) {
+            return;
+        }
+
+        renderComment(data.comment, true);
+        commentForm.reset();
+    });
+
+    loadMoreCommentsButton.addEventListener('click', () => {
+        if (commentsPage < lastCommentsPage) {
+            loadComments(commentsPage + 1);
+        }
+    });
+
+    loadComments();
 </script>
 @endsection
